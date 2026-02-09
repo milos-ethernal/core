@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** Refactor `GatorPermissionsController`: simplified config, permission storage, and public API ([#7847](https://github.com/MetaMask/core/pull/7847))
+  - Constructor requires `config` with `supportedPermissionTypes`; optional `gatorPermissionsProviderSnapId` and `state`; enable/disable flow removed
+  - State: `grantedPermissions` (array of `PermissionInfoWithMetadata`) replaces `gatorPermissionsMapSerialized`; `isGatorPermissionsEnabled` removed
+  - `fetchAndUpdateGatorPermissions()` no longer accepts parameters
+  - `getPendingRevocations` / `pendingRevocations` getter replaced by `isPendingRevocation(permissionContext)`; list on `state.pendingRevocations`
+  - Messenger: removed `EnableGatorPermissions` and `DisableGatorPermissions` actions; added `isPendingRevocation` action
+  - Removed exports: `serializeGatorPermissionsMap`, `deserializeGatorPermissionsMap`, `GatorPermissionsNotEnabledError`, `CustomPermission`, `PermissionTypesWithCustom`, `PermissionResponseSanitized`, `StoredGatorPermissionSanitized`, `GatorPermissionsMap`, `SupportedGatorPermissionType`, `GatorPermissionsMapByPermissionType`, `GatorPermissionsListByPermissionTypeAndChainId`, `GatorPermissionsControllerErrorCode.GatorPermissionsNotEnabled`
+  - Added exports: `GatorPermissionsControllerConfig`, `PermissionInfo`, `PermissionInfoWithMetadata`, `SupportedPermissionType`
 - Bump `@metamask/transaction-controller` from `^62.11.0` to `^62.15.0` ([#7775](https://github.com/MetaMask/core/pull/7775), [#7802](https://github.com/MetaMask/core/pull/7802), [#7832](https://github.com/MetaMask/core/pull/7832), [#7854](https://github.com/MetaMask/core/pull/7854))
 
 ## [1.1.2]
