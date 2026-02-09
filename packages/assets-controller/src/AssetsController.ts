@@ -195,6 +195,16 @@ export type AssetsControllerMessenger = Messenger<
 // CONTROLLER OPTIONS
 // ============================================================================
 
+/**
+ * Payload for the first init/fetch MetaMetrics event.
+ * Passed to the optional trackMetaMetricsEvent callback when the initial
+ * asset fetch completes after unlock or app open.
+ */
+export type AssetsControllerFirstInitFetchMetaMetricsPayload = {
+  /** Duration of the first init fetch in milliseconds. */
+  duration_ms: number;
+};
+
 export type AssetsControllerOptions = {
   messenger: AssetsControllerMessenger;
   state?: Partial<AssetsControllerState>;
@@ -209,6 +219,13 @@ export type AssetsControllerOptions = {
   queryApiClient: ApiPlatformClient;
   /** Optional configuration for RpcDataSource. */
   rpcDataSourceConfig?: RpcDataSourceConfig;
+  /**
+   * Optional callback invoked when the first init/fetch completes (e.g. after unlock).
+   * Use this to track first init fetch duration in MetaMetrics.
+   */
+  trackMetaMetricsEvent?: (
+    payload: AssetsControllerFirstInitFetchMetaMetricsPayload,
+  ) => void;
 };
 
 // ============================================================================
@@ -357,6 +374,14 @@ export class AssetsController extends BaseController<
   /** Default update interval hint passed to data sources */
   readonly #defaultUpdateInterval: number;
 
+  /** Optional callback for first init/fetch MetaMetrics (duration). */
+  readonly #trackMetaMetricsEvent?: (
+    payload: AssetsControllerFirstInitFetchMetaMetricsPayload,
+  ) => void;
+
+  /** Whether we have already reported first init fetch for this session (reset on #stop). */
+  #firstInitFetchReported = false;
+
   readonly #controllerMutex = new Mutex();
 
   /**
@@ -411,6 +436,7 @@ export class AssetsController extends BaseController<
     isEnabled = (): boolean => true,
     queryApiClient,
     rpcDataSourceConfig,
+    trackMetaMetricsEvent,
   }: AssetsControllerOptions) {
     super({
       name: CONTROLLER_NAME,
@@ -424,6 +450,7 @@ export class AssetsController extends BaseController<
 
     this.#isEnabled = isEnabled();
     this.#defaultUpdateInterval = defaultUpdateInterval;
+    this.#trackMetaMetricsEvent = trackMetaMetricsEvent;
     const rpcConfig = rpcDataSourceConfig ?? {};
 
     this.#backendWebsocketDataSource = new BackendWebsocketDataSource({
@@ -1371,12 +1398,24 @@ export class AssetsController extends BaseController<
 
     this.#subscribeToDataSources();
     if (this.#selectedAccounts.length > 0) {
+      const startTime = Date.now();
       this.getAssets(this.#selectedAccounts, {
         chainIds: [...this.#enabledChains],
         forceUpdate: true,
-      }).catch((error) => {
-        log('Failed to fetch assets', error);
-      });
+      })
+        .then(() => {
+          if (
+            this.#trackMetaMetricsEvent &&
+            !this.#firstInitFetchReported
+          ) {
+            this.#firstInitFetchReported = true;
+            const duration_ms = Date.now() - startTime;
+            this.#trackMetaMetricsEvent({ duration_ms });
+          }
+        })
+        .catch((error) => {
+          log('Failed to fetch assets', error);
+        });
     }
   }
 
@@ -1389,6 +1428,8 @@ export class AssetsController extends BaseController<
       activeSubscriptionCount: this.#activeSubscriptions.size,
       hasPriceSubscription: this.#activeSubscriptions.has('ds:PriceDataSource'),
     });
+
+    this.#firstInitFetchReported = false;
 
     // Stop price subscription first (uses direct messenger call)
     this.unsubscribeAssetsPrice();
